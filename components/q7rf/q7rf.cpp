@@ -88,20 +88,28 @@ unsigned long elapsed(unsigned long since, unsigned long now) {
 uint8_t state_to_msg(bool state) { return state ? MSG_HEAT_ON : MSG_HEAT_OFF; }
 
 void encode_bits(uint16_t byte, uint8_t pad_to_length, char **dest) {
-  char binary[9];
-  itoa(byte, binary, 2);
+  char binary[17];  // Increased buffer size to accommodate 16-bit integer plus null terminator
+  snprintf(binary, sizeof(binary), "%016u", byte);  // Use snprintf for safe formatting
   int binary_len = strlen(binary);
 
+  // Ensure we don't exceed the destination buffer (assuming it's large enough)
+  int max_encoded_length = pad_to_length * strlen(Q7RF_ZERO_BIT_DATA);
+  
   if (binary_len < pad_to_length) {
-    for (int p = 0; p < pad_to_length - binary_len; p++) {
-      strncpy(*dest, Q7RF_ZERO_BIT_DATA, strlen(Q7RF_ZERO_BIT_DATA));
-      *dest += strlen(Q7RF_ZERO_BIT_DATA);
+    for (int p = 0; p < pad_to_length - binary_len && max_encoded_length > 0; p++) {
+      size_t copy_len = std::min(strlen(Q7RF_ZERO_BIT_DATA), (size_t)max_encoded_length);
+      strncpy(*dest, Q7RF_ZERO_BIT_DATA, copy_len);
+      *dest += copy_len;
+      max_encoded_length -= copy_len;
     }
   }
 
-  for (int b = 0; b < binary_len; b++) {
-    strncpy(*dest, binary[b] == '1' ? Q7RF_ONE_BIT_DATA : Q7RF_ZERO_BIT_DATA, strlen(Q7RF_ONE_BIT_DATA));
-    *dest += strlen(Q7RF_ZERO_BIT_DATA);
+  for (int b = 0; b < binary_len && max_encoded_length > 0; b++) {
+    const char* bit_data = (binary[b] == '1') ? Q7RF_ONE_BIT_DATA : Q7RF_ZERO_BIT_DATA;
+    size_t copy_len = std::min(strlen(bit_data), (size_t)max_encoded_length);
+    strncpy(*dest, bit_data, copy_len);
+    *dest += copy_len;
+    max_encoded_length -= copy_len;
   }
 }
 
