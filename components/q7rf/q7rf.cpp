@@ -329,7 +329,8 @@ bool Q7RFSwitch::send_msg(uint8_t msg) {
       break;
     default:
       // Log
-      ESP_LOGD(TAG, "Unknown message: %s", msg);
+      ESP_LOGD(TAG, "Unknown message: %d", msg);
+      return false;
   }
 
   ESP_LOGI(TAG, "Attempting to send message: %s", text_msg);
