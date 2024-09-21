@@ -260,10 +260,7 @@ void Q7RFSwitch::write_cc_config_register(uint8_t reg, uint8_t value) {
 
 bool Q7RFSwitch::send_cc_data(const uint8_t *data, size_t length) {
   uint8_t buffer[length];
-  for (int i = 0; i < length; i++) {
-    buffer[i] = *data;
-    data++;
-  }
+  memcpy(buffer, data, length);
 
   this->send_cc_cmd(CMD_SIDLE);
   this->send_cc_cmd(CMD_SFRX);
@@ -276,10 +273,25 @@ bool Q7RFSwitch::send_cc_data(const uint8_t *data, size_t length) {
 
   this->send_cc_cmd(CMD_STX);
 
+  // Wait for transmission to complete
+  unsigned long start_time = millis();
   uint8_t state;
-  this->read_cc_register(SREG_MARCSTATE, &state);
-  state &= 0x1f;
-  if (state != MARCSTATE_TX && state != MARCSTATE_TX_END && state != MARCSTATE_RXTX_SWITCH) {
+  do {
+    this->read_cc_register(SREG_MARCSTATE, &state);
+    state &= 0x1f;
+    if (millis() - start_time > 1000) {  // 1 second timeout
+      ESP_LOGE(TAG, "Timeout waiting for transmission to complete");
+      this->send_cc_cmd(CMD_SIDLE);
+      return false;
+    }
+  } while (state == MARCSTATE_TX);
+
+  ESP_LOGI(TAG, "Transmission completed, final state: 0x%02x", state);
+
+  // Add a small delay to ensure transmission is fully complete
+  delay(10);
+
+  if (state != MARCSTATE_TX_END && state != MARCSTATE_RXTX_SWITCH) {
     ESP_LOGE(TAG, "CC1101 in invalid state after sending, returning to idle. State: 0x%02x", state);
     this->send_cc_cmd(CMD_SIDLE);
     return false;
@@ -289,36 +301,51 @@ bool Q7RFSwitch::send_cc_data(const uint8_t *data, size_t length) {
 }
 
 bool Q7RFSwitch::send_msg(uint8_t msg) {
-  if (msg == MSG_NONE)
+  if (msg == MSG_NONE) {
+    ESP_LOGD(TAG, "Message not sent: MSG_NONE");
     return false;
+  }
 
   bool result = false;
   const char *text_msg = NULL;
+  const uint8_t *data = NULL;
+  size_t length = 0;
+
   switch (msg) {
     case MSG_HEAT_ON:
-      result = this->send_cc_data(this->msg_heat_on_, sizeof(this->msg_heat_on_));
+      data = this->msg_heat_on_;
+      length = sizeof(this->msg_heat_on_);
       text_msg = "HEAT ON";
       break;
     case MSG_HEAT_OFF:
-      result = this->send_cc_data(this->msg_heat_off_, sizeof(this->msg_heat_off_));
+      data = this->msg_heat_off_;
+      length = sizeof(this->msg_heat_off_);
       text_msg = "HEAT OFF";
       break;
     case MSG_PAIR:
-      result = this->send_cc_data(this->msg_pair_, sizeof(this->msg_pair_));
+      data = this->msg_pair_;
+      length = sizeof(this->msg_pair_);
       text_msg = "PAIR";
       break;
+    default:
+      // Log
+      ESP_LOGD(TAG, "Unknown message: %s", msg);
   }
 
-  if (text_msg) {
-    ESP_LOGD(TAG, "Sent message: %s", text_msg);
-  }
+  ESP_LOGI(TAG, "Attempting to send message: %s", text_msg);
+  ESP_LOGD(TAG, "Message data (first 8 bytes): %02x %02x %02x %02x %02x %02x %02x %02x",
+           data[0], data[1], data[2], data[3], data[4], data[5], data[6], data[7]);
+
+  result = this->send_cc_data(data, length);
 
   if (result) {
+    ESP_LOGI(TAG, "Successfully sent message: %s", text_msg);
     this->last_msg_time_ = millis();
   } else {
+    ESP_LOGE(TAG, "Failed to send message: %s", text_msg);
     this->msg_errors_++;
     if (this->msg_errors_ >= MSG_SEND_ERRORS_RESET_LIMIT) {
-      ESP_LOGE(TAG, "Multiple message send errors occured, forcing CC1101 reset.");
+      ESP_LOGE(TAG, "Multiple message send errors occurred, forcing CC1101 reset.");
       this->reset_cc();
       this->msg_errors_ = 0;
     }
