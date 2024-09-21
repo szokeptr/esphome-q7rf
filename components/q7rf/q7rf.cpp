@@ -88,10 +88,11 @@ unsigned long elapsed(unsigned long since, unsigned long now) {
 uint8_t state_to_msg(bool state) { return state ? MSG_HEAT_ON : MSG_HEAT_OFF; }
 
 void encode_bits(uint16_t byte, uint8_t pad_to_length, char **dest) {
-  char binary[9];
+  char binary[17];  // Max length for a 16-bit integer in binary + null terminator
   itoa(byte, binary, 2);
   int binary_len = strlen(binary);
 
+  // Pad with zeros if necessary
   if (binary_len < pad_to_length) {
     for (int p = 0; p < pad_to_length - binary_len; p++) {
       strncpy(*dest, Q7RF_ZERO_BIT_DATA, strlen(Q7RF_ZERO_BIT_DATA));
@@ -99,11 +100,13 @@ void encode_bits(uint16_t byte, uint8_t pad_to_length, char **dest) {
     }
   }
 
+  // Append the binary bits
   for (int b = 0; b < binary_len; b++) {
     strncpy(*dest, binary[b] == '1' ? Q7RF_ONE_BIT_DATA : Q7RF_ZERO_BIT_DATA, strlen(Q7RF_ONE_BIT_DATA));
-    *dest += strlen(Q7RF_ZERO_BIT_DATA);
+    *dest += strlen(Q7RF_ONE_BIT_DATA);
   }
 }
+
 
 void compile_msg(uint16_t device_id, uint8_t cmd, uint8_t *msg) {
   char binary_msg[360];
