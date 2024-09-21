@@ -89,7 +89,7 @@ uint8_t state_to_msg(bool state) { return state ? MSG_HEAT_ON : MSG_HEAT_OFF; }
 
 void encode_bits(uint16_t byte, uint8_t pad_to_length, char **dest) {
   char binary[17];  // Max length for a 16-bit integer in binary + null terminator
-  itoa(byte, binary, 2);
+  snprintf(binary, sizeof(binary), "%016b", byte);  // Convert to binary string
   int binary_len = strlen(binary);
 
   // Pad with zeros if necessary
@@ -120,7 +120,7 @@ void compile_msg(uint16_t device_id, uint8_t cmd, uint8_t *msg) {
   char *payload_start = cursor;
 
   // Command
-  encode_bits(device_id, 16, &cursor);
+  encode_bits(device_id, 8, &cursor);
   encode_bits(8, 4, &cursor);
   encode_bits(cmd, 8, &cursor);
 
