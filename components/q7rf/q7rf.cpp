@@ -254,32 +254,47 @@ void Q7RFSwitch::write_cc_config_register(uint8_t reg, uint8_t value) {
 }
 
 bool Q7RFSwitch::send_cc_data(const uint8_t *data, size_t length) {
+  ESP_LOGV(TAG, "Entering send_cc_data with data length: %d", length);
+
   uint8_t buffer[length];
   for (int i = 0; i < length; i++) {
     buffer[i] = *data;
     data++;
   }
+  ESP_LOGV(TAG, "Data copied to buffer");
 
   this->send_cc_cmd(CMD_SIDLE);
+  ESP_LOGV(TAG, "Sent CMD_SIDLE");
   this->send_cc_cmd(CMD_SFRX);
+  ESP_LOGV(TAG, "Sent CMD_SFRX");
   this->send_cc_cmd(CMD_SFTX);
+  ESP_LOGV(TAG, "Sent CMD_SFTX");
 
   this->enable();
+  ESP_LOGV(TAG, "Enabled SPI");
   this->write_byte(CFIFO_TX_BURST);
+  ESP_LOGV(TAG, "Wrote CFIFO_TX_BURST");
   this->write_array(buffer, length);
+  ESP_LOGV(TAG, "Wrote data array to FIFO");
   this->disable();
+  ESP_LOGV(TAG, "Disabled SPI");
 
   this->send_cc_cmd(CMD_STX);
+  ESP_LOGV(TAG, "Sent CMD_STX");
 
   uint8_t state;
   this->read_cc_register(SREG_MARCSTATE, &state);
   state &= 0x1f;
+  ESP_LOGV(TAG, "Read MARCSTATE: 0x%02x", state);
+
   if (state != MARCSTATE_TX && state != MARCSTATE_TX_END && state != MARCSTATE_RXTX_SWITCH) {
     ESP_LOGE(TAG, "CC1101 in invalid state after sending, returning to idle. State: 0x%02x", state);
     this->send_cc_cmd(CMD_SIDLE);
+    ESP_LOGV(TAG, "Sent CMD_SIDLE due to invalid state");
     return false;
   }
 
+  ESP_LOGV(TAG, "send_cc_data completed successfully");
   return true;
 }
 
